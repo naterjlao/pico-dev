@@ -15,22 +15,53 @@ const unsigned int CLOCK_PIN = 13;
 const unsigned int LATCH_PIN = 14;
 const unsigned int DATA_PIN = 15;
 
+/// This gets updated in runtime
 static unsigned char SHIFT_REG_LOOKUP[10];
+// ----------------------------------------------------------------------------
+/// @brief Initializes the lookup table for the shift register.
+///
+/// @details The SHIFT_REG_MAPPING array contains the bit mask for each output 
+/// pin of the shift register. This is ordered in respect to shift register
+/// output index:
+/// @code
+/// SHIFT_REG_MAPPING = {OUT_0_MASK, OUT_1_MASK, ..., OUT_7_MASK}
+/// @endcode
+/// The HEX_SEGMENT_LOOKUP contains the LED configuration for the active
+/// LED for each digit in the 7 segment display:
+/// @code
+/// 0x80 = DP
+/// 0x40 = A
+/// 0x20 = B
+/// 0x10 = C
+/// 0x08 = D
+/// 0x04 = E
+/// 0x02 = F
+/// 0x01 = G
+/// @endcode
+/// This function converts the HEX_SEGMENT_LOOKUP and generates the
+/// SHIFT_REG_LOOKUP table based on the SHIFT_REG_MAPPING table.
+///
+/// @todo add parameter input
+// ----------------------------------------------------------------------------
 void initialize_shift_reg_lookup(void)
 {
+    unsigned char buffer, bit;
+    int digit_idx, map_idx;
+
     memset(SHIFT_REG_LOOKUP,0,sizeof(SHIFT_REG_LOOKUP));
-    unsigned char buffer;
-    int digit_idx, mask_idx;
+    
     digit_idx = 0;
     while (digit_idx < 10)
     {
         buffer = 0;
-        mask_idx = 0;
-        while (mask_idx < 8)
+        map_idx = 0;
+        bit = 0x8;
+        while (map_idx < 8)
         {
-            if (HEX_SEGMENT_LOOKUP[digit_idx] & SHIFT_REG_MAP_ENTRY[mask_idx])
-                buffer |= (0x1 << mask_idx);
-            mask_idx++;
+            if (HEX_SEGMENT_LOOKUP[digit_idx] & SHIFT_REG_MAPPING[map_idx])
+                buffer |= bit;
+            bit = bit >> 1;
+            map_idx++;
         }
         SHIFT_REG_LOOKUP[digit_idx] = buffer;
         digit_idx++; 
@@ -51,18 +82,18 @@ void initialize_gpio(void)
 /// @param digit number 0-9
 void load_digit(const unsigned char digit)
 {
-    int bit;
     const unsigned char sr_hex = SHIFT_REG_LOOKUP[digit];
-    unsigned char mask = 0x80;
+    unsigned char mask;
 
-    /// Set Load Data
+    /// Set Load Data - Set Latch Down
     gpio_pull_down(CLOCK_PIN);
     gpio_pull_down(LATCH_PIN);
     gpio_pull_up(CLOCK_PIN);
 
-    /// Load Data
-    bit = 0;
-    while (bit < 8)
+    /// Load Data - Set Data Pin HI or LO
+    /// Order: OUT_0_BIT | OUT_2_BIT | ... | OUT_7_BIT
+    mask = 0x8;
+    while (mask > 0)
     {
         gpio_pull_up(CLOCK_PIN);
         if (sr_hex & mask)
@@ -71,10 +102,9 @@ void load_digit(const unsigned char digit)
             gpio_pull_down(DATA_PIN);
         gpio_pull_down(CLOCK_PIN);
         mask = mask >> 1;
-        bit++;
     }
 
-    // Output Enable
+    // Output Enable - Set Latch Up
     gpio_pull_down(CLOCK_PIN);
     gpio_pull_up(LATCH_PIN);
     gpio_pull_up(CLOCK_PIN);
