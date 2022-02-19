@@ -1,22 +1,110 @@
 
-
+#include <string.h>
+//#include "stdio.h"
 #include "pico/stdlib.h"
 #include "shift_segments.h"
 
-const uint COLON_PIN = 18;
+const unsigned int COLON_PIN = 18;
 
-const uint D1_PIN = 16;
-const uint D2_PIN = 12;
-const uint D3_PIN = 11;
-const uint D4_PIN = 17;
+const unsigned int D1_PIN = 16;
+const unsigned int D2_PIN = 12;
+const unsigned int D3_PIN = 11;
+const unsigned int D4_PIN = 17;
 
-const uint CLOCK_PIN = 13;
-const uint LATCH_PIN = 14;
-const uint DATA_PIN = 15;
+const unsigned int CLOCK_PIN = 13;
+const unsigned int LATCH_PIN = 14;
+const unsigned int DATA_PIN = 15;
+
+static unsigned char SHIFT_REG_LOOKUP[10];
+void initialize_shift_reg_lookup(void)
+{
+    memset(SHIFT_REG_LOOKUP,0,sizeof(SHIFT_REG_LOOKUP));
+    unsigned char buffer;
+    int digit_idx, mask_idx;
+    digit_idx = 0;
+    while (digit_idx < 10)
+    {
+        buffer = 0;
+        mask_idx = 0;
+        while (mask_idx < 8)
+        {
+            if (HEX_SEGMENT_LOOKUP[digit_idx] & SHIFT_REG_MAP_ENTRY[mask_idx])
+                buffer |= (0x1 << mask_idx);
+            mask_idx++;
+        }
+        SHIFT_REG_LOOKUP[digit_idx] = buffer;
+        digit_idx++; 
+    }
+}
+
+void initialize_gpio(void)
+{
+    gpio_init(CLOCK_PIN);
+    gpio_init(LATCH_PIN);
+    gpio_init(DATA_PIN);
+    gpio_init(D1_PIN);
+    gpio_init(D2_PIN);
+    gpio_init(D3_PIN);
+    gpio_init(D4_PIN);
+}
+
+/// @param digit number 0-9
+void load_digit(const unsigned char digit)
+{
+    int bit;
+    const unsigned char sr_hex = SHIFT_REG_LOOKUP[digit];
+    unsigned char mask = 0x80;
+
+    /// Set Load Data
+    gpio_pull_down(CLOCK_PIN);
+    gpio_pull_down(LATCH_PIN);
+    gpio_pull_up(CLOCK_PIN);
+
+    /// Load Data
+    bit = 0;
+    while (bit < 8)
+    {
+        gpio_pull_up(CLOCK_PIN);
+        if (sr_hex & mask)
+            gpio_pull_up(DATA_PIN);
+        else
+            gpio_pull_down(DATA_PIN);
+        gpio_pull_down(CLOCK_PIN);
+        mask = mask >> 1;
+        bit++;
+    }
+
+    // Output Enable
+    gpio_pull_down(CLOCK_PIN);
+    gpio_pull_up(LATCH_PIN);
+    gpio_pull_up(CLOCK_PIN);
+}
 
 int main(void)
 {
+    initialize_shift_reg_lookup();
+    initialize_gpio();
 
+    
+
+#if 1
+    gpio_pull_down(D1_PIN);
+    gpio_pull_up(D2_PIN);
+    gpio_pull_up(D3_PIN);
+    gpio_pull_up(D4_PIN);
+
+    load_digit(0);
+
+#if 0
+    int idx = 0;
+    while (true)
+    {
+        load_digit(idx++);
+        idx = idx % 10;
+        sleep_ms(250);
+    }
+#endif
+#else
     gpio_init(COLON_PIN);
     gpio_init(CLOCK_PIN);
     gpio_init(LATCH_PIN);
@@ -26,7 +114,7 @@ int main(void)
     gpio_init(D3_PIN);
     gpio_init(D4_PIN);
 
-    uint random = 0;
+    unsigned int random = 0;
     while (true)
     {
 
@@ -81,6 +169,8 @@ int main(void)
         random++;
         sleep_ms(250);
     }
+    
+#endif
     return 0;
 }
 
@@ -99,14 +189,14 @@ static void display_init(void)
     gpio_init(LED_PIN_COLON);
 
     // ----- SINK ----- //
-    for (uint digit = 0; digit < DIGIT_SOURCE_LEN; digit++)
+    for (unsigned int digit = 0; digit < DIGIT_SOURCE_LEN; digit++)
     {
         gpio_init(DIGIT_SOURCE[digit]);
     }
     gpio_init(COLON_SOURCE);
 }
 
-static void gpio_pull_up_down(uint gpio, bool state)
+static void gpio_pull_up_down(unsigned int gpio, bool state)
 {
     if (state)
     {
@@ -129,7 +219,7 @@ static void display_clear(bool on)
     gpio_pull_up_down(LED_PIN_G    , on);
     gpio_pull_up_down(LED_PIN_DP   , on);
     gpio_pull_up_down(LED_PIN_COLON, on);
-    for (uint digit = 0; digit < DIGIT_SOURCE_LEN; digit++)
+    for (unsigned int digit = 0; digit < DIGIT_SOURCE_LEN; digit++)
     {
         gpio_pull_up_down(DIGIT_SOURCE[digit], (!on));
     }
@@ -149,7 +239,7 @@ static void display_digit(unsigned char digit, unsigned char idx)
     gpio_pull_up_down(LED_PIN_G , (hex & LED_PIN_G_MASK ));
     gpio_pull_up_down(LED_PIN_DP, (hex & LED_PIN_DP_MASK));
 
-    for (uint digit_idx = 0; digit_idx < DIGIT_SOURCE_LEN; digit_idx++)
+    for (unsigned int digit_idx = 0; digit_idx < DIGIT_SOURCE_LEN; digit_idx++)
     {
         gpio_pull_up_down(DIGIT_SOURCE[digit_idx], (!(digit_idx == idx)));
         //gpio_pull_up_down(DIGIT_SOURCE[digit_idx], (!(digit_idx == idx)));
@@ -161,8 +251,8 @@ int main() {
     display_init();
     display_clear(true);
 
-    uint counter = 0;
-    uint tick = 0;
+    unsigned int counter = 0;
+    unsigned int tick = 0;
 
     while (true)
     {   
